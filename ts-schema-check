@@ -67,7 +67,7 @@ const schema_raw = fs.readFileSync(schema_file).toString();
 function parse_interface_name(schema_raw) {
   const lexeme_regex = /(\/\/[^\n]*\n|\/\*([^\*]|\*[^\\])*\*\/|\s+)/gms;
   let end_of_previous_match = 0;
-  let interesting_tokens_found = 0;  // ['interface', NAME] eventually
+  let interesting_tokens_found = 0;  // 2, eventually
   while (end_of_previous_match !== schema_raw.length) {
     const result = lexeme_regex.exec(schema_raw);
     // If `result` is not `null`, then we found a match somewhere.
