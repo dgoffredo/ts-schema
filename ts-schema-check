@@ -60,12 +60,13 @@ const schema_raw = fs.readFileSync(schema_file).toString();
 //     line comment  ::=  // ...
 //     block comment  ::=  /* ... */
 //     whitespace  ::=  \s+
+//     open brace  ::=  "{"
 //
 // The trick is to find the first two sequences of characters in `schema_raw`
 // that do _not_ satisfy any of the above.  Those two will be "interface" and
 // NAME.  NAME is what we're looking for.
 function parse_interface_name(schema_raw) {
-  const lexeme_regex = /(\/\/[^\n]*\n|\/\*([^\*]|\*[^\\])*\*\/|\s+)/gms;
+  const lexeme_regex = /(\/\/[^\n]*\n|\/\*([^\*]|\*[^\\])*\*\/|\s+|[{])/gms;
   let end_of_previous_match = 0;
   let interesting_tokens_found = 0;  // 2, eventually
   while (end_of_previous_match !== schema_raw.length) {
