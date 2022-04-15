@@ -141,9 +141,10 @@ fs.writeFileSync(source_path, typescript_source);
 const command = '/usr/bin/env';
 const command_args = ['tsc', '--noEmit', source_path];
 const options = {
-  stdio: 'inherit'
+  // Inherit stdin, stdout -> stderr, inherit stderr
+  stdio: [0, 2, 2]
 };
-const {status, signal} = child_process.spawnSync(command, command_args, options);
+const {status} = child_process.spawnSync(command, command_args, options);
 
 fs.rmSync(temp_dir, {recursive: true});
 process.exit(status === 0 ? 0 : 1);
