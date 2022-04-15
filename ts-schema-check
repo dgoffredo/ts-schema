@@ -1,0 +1,149 @@
+#!/usr/bin/env node
+
+const child_process = require('child_process');
+const fs = require('fs');
+
+function usage(file) {
+  file.write(`ts-schema-check — Validate JSON against a TypeScript interface.
+
+Usage:
+
+    ts-schema-check <SCHEMA_FILE> [<JSON_FILE>]
+        Validate the JSON value in the optionally specified JSON_FILE
+        against the TypeScript interface in the specified SCHEMA_FILE.
+        If the JSON satisfies the interface, return status code 0.
+        If the JSON does not satisfy the interface, print a diagnostic to
+        standard error and return status code 1.
+        If an error occurs, return status code 2.
+        If JSON_FILE is not specified or is "-", then read the JSON value from
+        standard input.
+
+    ts-schema-check --help
+    ts-schema-check -h
+        Print this message.
+`);
+}
+
+const [node_path, script_path, ...args] = process.argv;
+
+if (args.length < 1 || args.length > 2) {
+  usage(process.stderr);
+  process.exit(2);
+}
+
+if (args.length === 1 && ['--help', '-h'].indexOf(args[0]) !== -1) {
+  usage(process.stdout);
+  process.exit(0);
+}
+
+let json_file;
+const file = args[1];
+if (file === '-' || file === undefined) {
+  // Could use file descriptor versions of `fs` functions to avoid this
+  // dependency on the `stdin` device, but meh.
+  json_file = '/dev/stdin';
+} else {
+  json_file = file;
+}
+
+const schema_file = args[0];
+const schema_raw = fs.readFileSync(schema_file).toString();
+// Now read the name of the interface.
+//
+// The assumption is that `schema_raw` looks like:
+//
+//     interface NAME { ...
+//
+// but it might contain comments and whitespace.  So, here's the world's
+// smallest TypeScript lexer:
+//
+//     line comment  ::=  // ...
+//     block comment  ::=  /* ... */
+//     whitespace  ::=  \s+
+//
+// The trick is to find the first two sequences of characters in `schema_raw`
+// that do _not_ satisfy any of the above.  Those two will be "interface" and
+// NAME.  NAME is what we're looking for.
+function parse_interface_name(schema_raw) {
+  const lexeme_regex = /(\/\/[^\n]*\n|\/\*([^\*]|\*[^\\])*\*\/|\s+)/gms;
+  let end_of_previous_match = 0;
+  let interesting_tokens_found = 0;  // ['interface', NAME] eventually
+  while (end_of_previous_match !== schema_raw.length) {
+    const result = lexeme_regex.exec(schema_raw);
+    // If `result` is not `null`, then we found a match somewhere.
+    // Any characters we skipped did _not_ match, and thus are of
+    // interest.
+    // If `result` is `null`, then nothing remaining matched.
+    // Any characters remaining are thus of interest.
+    let match_begin;
+    let match_end;
+    if (result !== null) {
+      const matched_substring = result[0];
+      match_begin = result.index;
+      match_end = result.index + matched_substring.length;
+    } else {
+      match_begin = schema_raw.length;
+      match_end = schema_raw.length;
+    }
+
+    const interesting_token = schema_raw.slice(end_of_previous_match, match_begin);
+    end_of_previous_match = match_end;
+    // If it's empty, that's not interesting.
+    if (interesting_token.length === 0) {
+      continue;
+    }
+
+    ++interesting_tokens_found;
+    switch (interesting_tokens_found) {
+    case 1:
+      if (interesting_token !== 'interface') {
+        console.error('Unexpected character sequence while parsing schema: ', interesting_token);
+        process.exit(2);
+      }
+      break;
+    case 2:
+      return interesting_token;
+    // There is no other possibility.
+    }
+  }
+}
+
+const interface_name = parse_interface_name(schema_raw);
+
+const json_raw = fs.readFileSync(json_file).toString();
+try {
+  JSON.parse(json_raw);
+} catch (error) {
+  console.error('Candidate value must be valid JSON.  Error occurred: ', error);
+  process.exit(2);
+}
+
+// The shape of `typescript_source` is chosen so that line numbers in the
+// diagnostic output of the TypeScript compiler will correspond to line
+// numbers in the JSON file.
+// Line numbers will _not_ match up with the schema file.  It's one or the
+// other.
+const typescript_source = `function run() { check(${json_raw}); }
+
+${schema_raw}
+
+function check(value: ${interface_name}) {
+}
+
+run();
+`;
+
+// Forget Windows.
+const temp_dir = fs.mkdtempSync('/tmp/');
+const source_path = `${temp_dir}/source.ts`;
+fs.writeFileSync(source_path, typescript_source);
+
+const command = '/usr/bin/env';
+const command_args = ['tsc', '--noEmit', source_path];
+const options = {
+  stdio: 'inherit'
+};
+const {status, signal} = child_process.spawnSync(command, command_args, options);
+
+fs.rmSync(temp_dir, {recursive: true});
+process.exit(status === 0 ? 0 : 1);
