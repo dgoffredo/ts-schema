@@ -44,9 +44,10 @@ and doesn't produce any output.
 
 Dependencies
 ------------
-- `/dev/stdin`
 - `/usr/bin/env`
+- `node`, the NodeJS command, must be visible to `/usr/bin/env`.
 - `tsc`, the TypeScript compiler, must be visible to `/usr/bin/env`.
+- `/dev/stdin`
 - `/tmp/`
 
 More
