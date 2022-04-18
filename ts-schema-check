@@ -54,6 +54,10 @@ const schema_raw = fs.readFileSync(schema_file).toString();
 //
 //     interface NAME { ...
 //
+// or
+//
+//     type NAME = ...
+//
 // but it might contain comments and whitespace.  So, here's the world's
 // smallest TypeScript lexer:
 //
@@ -97,7 +101,7 @@ function parse_interface_name(schema_raw) {
     ++interesting_tokens_found;
     switch (interesting_tokens_found) {
     case 1:
-      if (interesting_token !== 'interface') {
+      if (['interface', 'type'].indexOf(interesting_token) === -1) {
         console.error('Unexpected character sequence while parsing schema: ', interesting_token);
         process.exit(2);
       }
